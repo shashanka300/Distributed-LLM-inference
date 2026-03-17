@@ -2,222 +2,150 @@
 
 A learning-oriented distributed inference cluster built with FastAPI, HuggingFace Transformers, and Python background workers.
 
-This project demonstrates how to combine:
+## Table of Contents
 
-- Multi-node request routing with consistent hashing
-- Session affinity for cache locality
-- Worker-side priority scheduling and continuous batching
-- Basic rate limiting and queue control
-- Cluster metrics, anomaly detection, and PID-based autoscaling
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Repository Structure](#repository-structure)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Dependency Export](#dependency-export)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Benchmarks and Load Tests](#benchmarks-and-load-tests)
+- [Learning Guide](#learning-guide)
+- [Known Limitations](#known-limitations)
+- [Contributing](#contributing)
+- [License](#license)
 
-## Open Source License
+## Overview
 
-This project is licensed under the MIT License.
+This project simulates a small inference cluster with:
 
-See [LICENSE](./LICENSE) for full terms.
+- A router (`127.0.0.1:8000`)
+- Two baseline workers (`127.0.0.1:8001`, `127.0.0.1:8002`)
+- Optional autoscaled workers (`127.0.0.1:8003+`)
 
-## What This System Does
+It is designed to teach how routing, scheduling, observability, and autoscaling fit together for model-serving systems.
 
-The codebase runs a small cluster with:
+## Features
 
-- A router (`:8000`) that receives client requests and forwards them
-- Two baseline workers (`:8001`, `:8002`) that host the model API
-- Optional autoscaled workers (`:8003+`) spawned under load
+- Consistent-hash routing for stable session affinity
+- Heartbeat-driven health monitoring and failover
+- Worker-side priority queue with continuous batching
+- Token-bucket rate limiting
+- Cluster metrics aggregation and anomaly detection
+- PID-based autoscaling with cooldown controls
 
-At runtime:
+## Architecture
 
-1. Client sends `POST /generate` to the router with a `session_id`
-2. Router selects a healthy worker from a consistent-hash ring
-3. Worker enqueues request into a priority queue
-4. Scheduler batches nearby requests and calls model generation
-5. Router returns generated text plus routing metadata
-6. Metrics collector and autoscaler run in background loops
+High-level request path:
 
-## Quick Start
+1. Client sends `POST /generate` to router.
+2. Router selects healthy worker by `session_id` hash.
+3. Worker enqueues request into scheduler queue.
+4. Scheduler forms micro-batch and runs model generation.
+5. Worker returns generation result.
+6. Router returns response with routing metadata.
 
-### 1. Install dependencies
+Primary modules:
+
+- Router and control plane: `router/`
+- Worker API and scheduling: `server/`, `scheduler/`
+- Metrics and autoscaling: `metrics/`
+- Model and cache primitives: `core/`
+
+## Repository Structure
+
+```text
+inference_cluster/
+|-- core/
+|-- metrics/
+|-- router/
+|-- scheduler/
+|-- server/
+|-- tests/
+|-- LEARNING_GUIDE.md
+|-- LICENSE
+|-- pyproject.toml
+|-- requirements.txt
+|-- README.md
+`-- start_cluster.py
+```
+
+## Prerequisites
+
+- Python 3.10+
+- `uv` (recommended dependency manager) or `pip`
+
+## Installation
 
 ```bash
 uv sync
 ```
 
-### 2. Start the cluster
+Alternative (`pip`) setup:
+
+```bash
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+## Dependency Export
+
+`pyproject.toml` contains the project-declared dependencies.  
+This repository also includes [requirements.txt](./requirements.txt), exported from the `.venv` environment, to capture additional installed packages that may not be explicitly listed in `pyproject.toml`.
+
+Use:
+
+- `uv sync` for lockfile-driven reproducible setup
+- `pip install -r requirements.txt` when you want environment parity with the exported venv package set
+
+## Usage
+
+Start the cluster:
 
 ```bash
 python start_cluster.py
 ```
 
-This launches:
-
-- `server.api:app` as `worker-a` on `127.0.0.1:8001`
-- `server.api:app` as `worker-b` on `127.0.0.1:8002`
-- `router.router:app` on `127.0.0.1:8000`
-
-### 3. Check health
+Check status:
 
 ```bash
 python start_cluster.py status
 ```
 
-### 4. Smoke test session affinity
+Run session-affinity smoke test:
 
 ```bash
 python start_cluster.py test
 ```
 
-### 5. Open docs
+API docs:
 
 - Router docs: `http://127.0.0.1:8000/docs`
 - Worker docs: `http://127.0.0.1:8001/docs` and `http://127.0.0.1:8002/docs`
 
-## Detailed Walkthrough
+## Configuration
 
-## 1) Worker Service (`server/api.py`)
+Main defaults are defined in:
 
-Each worker process does four startup steps:
+- Ports and process startup: `start_cluster.py`
+- Router nodes and autoscaler settings: `router/router.py`
+- Scheduler defaults: `server/api.py`
+- Default model name: `core/model.py`
 
-1. Loads tokenizer + model (`Qwen/Qwen2.5-0.5B`)
-2. Initializes KV block allocator structures
-3. Starts scheduler background thread
-4. Runs warmup generation request
+## Testing
 
-Main worker endpoints:
-
-- `GET /health`: liveness and startup state
-- `GET /info`: model + scheduler + KV config summary
-- `POST /generate`: scheduler path (priority queue + batching + rate limit)
-- `POST /generate/direct`: direct model path (baseline without scheduler)
-- `GET /scheduler/stats`: queue, limiter, batching metrics
-- `POST /scheduler/config`: runtime tuning for batching parameters
-- `DELETE /scheduler/drain`: wait for queue to flush
-- `GET /cache/stats`: KV allocator usage snapshot
-- `DELETE /cache/flush`: clear active sequence caches
-- `GET /metrics`: combined worker metrics
-
-## 2) Scheduling Layer (`scheduler/`)
-
-Scheduler design:
-
-- HTTP threads submit `Request` objects to `PriorityQueue`
-- Background worker thread pops requests and forms micro-batches
-- Batch loop waits up to `max_wait_ms` to fill up to `max_batch_size`
-- Single forward/generate call serves multiple requests
-- Each request resolves via a `Future`
-
-Key files:
-
-- `priority_queue.py`: min-heap by `(priority, arrival_time)` for FIFO within tier
-- `rate_limiter.py`: token-bucket limiter (burst + refill behavior)
-- `scheduler.py`: batching worker loop, batch execution, scheduler metrics
-
-## 3) Router Layer (`router/`)
-
-Router is the cluster ingress and control plane.
-
-Core behavior:
-
-- Maintains consistent-hash ring of worker nodes
-- Maintains heartbeat monitor state for health-based routing
-- Routes by `session_id` for stable worker affinity
-- Falls back to next ring node if primary is unhealthy
-
-Key files:
-
-- `hash_ring.py`: virtual-node consistent hashing + distribution stats
-- `heartbeat.py`: periodic `/health` polling with up/down thresholds
-- `router.py`: FastAPI ingress, proxy endpoints, metrics/autoscaler wiring
-
-Router endpoints:
-
-- `GET /health`: router liveness + healthy workers
-- `GET /nodes`: ring stats + heartbeat + sample distribution
-- `GET /nodes/{node_id}/stats`: proxy worker `/metrics`
-- `POST /nodes/{node_id}/config`: proxy worker scheduler config
-- `POST /generate`: ingress generation endpoint
-- `GET /metrics`: cluster aggregated metrics
-- `GET /autoscaler/stats`: autoscaler + PID status
-- `GET /autoscaler/pid/history`: PID tick history
-- `POST /autoscaler/config`: live PID/cooldown tuning
-
-## 4) Metrics and Autoscaling (`metrics/`)
-
-The observability/autoscaling loop runs in router process:
-
-- `collector.py` polls worker `/metrics`
-- Tracks rolling latency/queue windows
-- Runs simple z-score anomaly detector
-- Exposes latest cluster snapshot
-
-PID control:
-
-- `pid.py` computes control output from queue depth error
-- Output interpreted as scale pressure (up/down)
-- Integral clamp limits windup
-- Tick history is retained for tuning/debugging
-
-Autoscaler:
-
-- `autoscaler.py` reads queue depth periodically
-- Uses PID output + thresholds + cooldown to decide actions
-- `scale_up`: spawn new worker process, wait for `/health`, register in ring+monitor
-- `scale_down`: remove owned worker from ring, terminate process
-
-## 5) Core Model/Cache Modules (`core/`)
-
-- `model.py`: model/tokenizer loading and direct generation helper
-- `attention.py`: educational NumPy self-attention implementation + causal mask
-- `kv_cache.py`: block allocator, prefix block sharing, copy-on-write semantics
-- `cache_manager.py`: sequence-level block table management
-
-Note: worker generation currently uses HuggingFace `use_cache=True` path; the custom KV cache layer exists for experimentation and instrumentation.
-
-## Code Structure
-
-```text
-inference_cluster/
-|-- core/
-|   |-- attention.py
-|   |-- cache_manager.py
-|   |-- kv_cache.py
-|   `-- model.py
-|-- metrics/
-|   |-- autoscaler.py
-|   |-- collector.py
-|   `-- pid.py
-|-- router/
-|   |-- hash_ring.py
-|   |-- heartbeat.py
-|   `-- router.py
-|-- scheduler/
-|   |-- priority_queue.py
-|   |-- rate_limiter.py
-|   `-- scheduler.py
-|-- server/
-|   `-- api.py
-|-- tests/
-|   |-- bench_m1.py
-|   |-- bench_m2.py
-|   |-- flood_test.py
-|   |-- test_attention.py
-|   |-- test_kv_cache.py
-|   |-- test_pid.py
-|   |-- test_scheduler.py
-|   `-- tests_hast_ring.py
-|-- main.py
-|-- pyproject.toml
-|-- start_cluster.py
-`-- README.md
-```
-
-## Running Tests
-
-Run with `pytest`:
+Run all tests:
 
 ```bash
 pytest -q
 ```
 
-Or run individual test scripts directly:
+Run individual suites:
 
 ```bash
 python tests/test_scheduler.py
@@ -225,26 +153,30 @@ python tests/test_pid.py
 python tests/tests_hast_ring.py
 ```
 
-## Benchmarking and Load Exercises
+## Benchmarks and Load Tests
 
-- `tests/bench_m1.py`: basic sequential benchmark
-- `tests/bench_m2.py`: scheduler/batching comparisons and latency studies
-- `tests/flood_test.py`: cluster flood scenarios to observe autoscaler behavior
+- `tests/bench_m1.py`: basic sequential latency baseline
+- `tests/bench_m2.py`: scheduler and batching comparisons
+- `tests/flood_test.py`: cluster flood scenarios for autoscaler behavior
 
-## Configuration Notes
+## Learning Guide
 
-- Ports are defined in `start_cluster.py` and `router/router.py`
-- Model name defaults to `Qwen/Qwen2.5-0.5B` in `core/model.py`
-- Scheduler defaults are set in `server/api.py`
-- Autoscaler/PID defaults are set in `router/router.py`
+For a detailed walkthrough and code navigation path:
 
-## Known Scope and Constraints
+- [LEARNING_GUIDE.md](./LEARNING_GUIDE.md)
 
-- Intended as an educational/experimental project, not production-hardened
-- Uses local process spawning, not container orchestration
-- No persistent queue or distributed state store
-- Health/routing/scale behavior is process-local
+## Known Limitations
+
+- Educational/experimental project, not production hardened
+- Local process orchestration only
+- No distributed persistent queue/state backend
+- Custom KV cache exists as infrastructure; generation path currently uses HF `use_cache=True`
 
 ## Contributing
 
-Issues and pull requests are welcome. If you plan major changes, open an issue first so design direction can be discussed.
+Issues and pull requests are welcome.  
+For major changes, open an issue first to align on direction.
+
+## License
+
+MIT License. See [LICENSE](./LICENSE).
