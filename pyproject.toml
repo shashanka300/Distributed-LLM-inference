@@ -1,0 +1,25 @@
+[project]
+name = "inference-cluster"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.135.1",
+    "numpy>=2.2.6",
+    "requests>=2.32.5",
+    "transformers>=5.3.0",
+    "uvicorn>=0.42.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "server", "scheduler"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
