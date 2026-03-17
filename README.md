@@ -16,6 +16,7 @@ A learning-oriented distributed inference cluster built with FastAPI, HuggingFac
 - [Testing](#testing)
 - [Benchmarks and Load Tests](#benchmarks-and-load-tests)
 - [Learning Guide](#learning-guide)
+- [Conceptual Book Placeholder](#conceptual-book-placeholder)
 - [Known Limitations](#known-limitations)
 - [Contributing](#contributing)
 - [License](#license)
@@ -62,16 +63,45 @@ Primary modules:
 ```text
 inference_cluster/
 |-- core/
+|   |-- __init__.py
+|   |-- attention.py
+|   |-- cache_manager.py
+|   |-- kv_cache.py
+|   `-- model.py
 |-- metrics/
+|   |-- autoscaler.py
+|   |-- collector.py
+|   `-- pid.py
+|-- resources/
+|   `-- CONCEPTUAL_BOOK_PLACEHOLDER.md
 |-- router/
+|   |-- hash_ring.py
+|   |-- heartbeat.py
+|   `-- router.py
 |-- scheduler/
+|   |-- __init__.py
+|   |-- priority_queue.py
+|   |-- rate_limiter.py
+|   `-- scheduler.py
 |-- server/
+|   |-- __init__.py
+|   `-- api.py
 |-- tests/
+|   |-- bench_m1.py
+|   |-- bench_m2.py
+|   |-- flood_test.py
+|   |-- test_attention.py
+|   |-- test_kv_cache.py
+|   |-- test_pid.py
+|   |-- test_scheduler.py
+|   `-- tests_hast_ring.py
 |-- LEARNING_GUIDE.md
 |-- LICENSE
+|-- main.py
 |-- pyproject.toml
-|-- requirements.txt
 |-- README.md
+|-- requirements.txt
+|-- uv.lock
 `-- start_cluster.py
 ```
 
@@ -164,6 +194,16 @@ python tests/tests_hast_ring.py
 For a detailed walkthrough and code navigation path:
 
 - [LEARNING_GUIDE.md](./LEARNING_GUIDE.md)
+
+## Conceptual Book Placeholder
+
+You can upload your future conceptual PDF to:
+
+- `resources/conceptual_understanding_book.pdf`
+
+A tracked placeholder file exists here:
+
+- [resources/CONCEPTUAL_BOOK_PLACEHOLDER.md](./resources/CONCEPTUAL_BOOK_PLACEHOLDER.md)
 
 ## Known Limitations
 
