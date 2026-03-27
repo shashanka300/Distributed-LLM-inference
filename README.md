@@ -203,7 +203,7 @@ You can upload your future conceptual PDF to:
 
 A tracked placeholder file exists here:
 
-- [resources/CONCEPTUAL_BOOK_PLACEHOLDER.md](./resources/CONCEPTUAL_BOOK_PLACEHOLDER.md)
+- [resources/CONCEPTUAL_BOOK_PLACEHOLDER.md](./resources/inference_cluster_complete.pdf)
 
 ## Known Limitations
 
