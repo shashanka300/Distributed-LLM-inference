@@ -16,7 +16,7 @@ A learning-oriented distributed inference cluster built with FastAPI, HuggingFac
 - [Testing](#testing)
 - [Benchmarks and Load Tests](#benchmarks-and-load-tests)
 - [Learning Guide](#learning-guide)
-- [Conceptual Book Placeholder](#conceptual-book-placeholder)
+- [Conceptual Book](#conceptual-book)
 - [Known Limitations](#known-limitations)
 - [Contributing](#contributing)
 - [License](#license)
@@ -195,15 +195,9 @@ For a detailed walkthrough and code navigation path:
 
 - [LEARNING_GUIDE.md](./LEARNING_GUIDE.md)
 
-## Conceptual Book Placeholder
+## Conceptual Book
 
-You can upload your future conceptual PDF to:
-
-- `resources/conceptual_understanding_book.pdf`
-
-A tracked placeholder file exists here:
-
-- [resources/CONCEPTUAL_BOOK_PLACEHOLDER.md](./resources/inference_cluster_complete.pdf)
+- [resources/inference_cluster_complete.pdf](./resources/inference_cluster_complete.pdf)
 
 ## Known Limitations
 
